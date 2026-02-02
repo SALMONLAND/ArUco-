@@ -1,4 +1,4 @@
-Design and Implementation of ArUco-Based Localization and Parking System for GPS-Denied Environments
+# Design and Implementation of ArUco-Based Localization and Parking System for GPS-Denied Environments
 
 실내 주차장에서 ArUco 마커를 스마트 인프라로 활용하여, 입구부터 빈 주차 공간까지 자율 주행하고 정밀 주차를 수행. 천장/벽면 마커는 경로 안내와 주차 가능 정보를 제공하고(V2I 통신), 주차 공간의 마커로 정확한 위치 제어를 수행.  아두이노와 OpenCV를 활용한 저비용 솔루션으로 GPS 없이 실내에서 정밀한 자율주행을 구현
 
