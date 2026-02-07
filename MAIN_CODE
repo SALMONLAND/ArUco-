@@ -1,0 +1,181 @@
+/*
+ * 아두이노 - 시리얼로 ArUco 데이터 수신 및 모터 제어
+ */
+
+#include <ArduinoJson.h>
+
+// 모터 핀 정의 (예시 - L298N 모터 드라이버)
+#define MOTOR_LEFT_FWD  5
+#define MOTOR_LEFT_BWD  6
+#define MOTOR_RIGHT_FWD 9
+#define MOTOR_RIGHT_BWD 10
+
+// 변수
+int markerID = -1;
+int markerX = 0;
+int markerY = 0;
+
+void setup() {
+  Serial.begin(9600);
+  
+  // 모터 핀 설정
+  pinMode(MOTOR_LEFT_FWD, OUTPUT);
+  pinMode(MOTOR_LEFT_BWD, OUTPUT);
+  pinMode(MOTOR_RIGHT_FWD, OUTPUT);
+  pinMode(MOTOR_RIGHT_BWD, OUTPUT);
+  
+  Serial.println("Arduino Ready");
+}
+
+void loop() {
+  // 시리얼 데이터 수신
+  if (Serial.available() > 0) {
+    String jsonString = Serial.readStringUntil('\n');
+    
+    // JSON 파싱
+    StaticJsonDocument<200> doc;
+    DeserializationError error = deserializeJson(doc, jsonString);
+    
+    if (!error) {
+      markerID = doc["id"];
+      markerX = doc["x"];
+      markerY = doc["y"];
+      
+      Serial.print("Received - ID: ");
+      Serial.print(markerID);
+      Serial.print(", X: ");
+      Serial.print(markerX);
+      Serial.print(", Y: ");
+      Serial.println(markerY);
+      
+      // 마커 ID에 따른 제어
+      controlByMarkerID(markerID, markerX, markerY);
+    }
+  }
+}
+
+void controlByMarkerID(int id, int x, int y) {
+  // 화면 중심 (320, 240 기준)
+  int centerX = 320;
+  int centerY = 240;
+  
+  int errorX = x - centerX;
+  int errorY = y - centerY;
+  
+  // 마커 ID별 동작
+  if (id >= 0 && id <= 99) {
+    // 천장 마커 (0~99) - 전진 및 위치 조정
+    followCeilingMarker(errorX);
+    
+  } else if (id >= 100 && id <= 149) {
+    // 벽면 마커 (100~149) - 회전
+    turnAtWall(id);
+    
+  } else if (id >= 150 && id <= 199) {
+    // 주차 마커 (150~199) - 주차 정렬
+    if (id % 2 == 1) {
+      // 홀수 ID = 빈 공간
+      alignToParking(errorX, errorY);
+    } else {
+      // 짝수 ID = 점유
+      moveForward(150);
+    }
+    
+  } else if (id == 200) {
+    // 입구 마커 - 정지
+    stopMotors();
+  }
+}
+
+// 천장 마커 따라가기
+void followCeilingMarker(int errorX) {
+  int baseSpeed = 150;
+  int correction = errorX / 3;
+  
+  int leftSpeed = baseSpeed + correction;
+  int rightSpeed = baseSpeed - correction;
+  
+  leftSpeed = constrain(leftSpeed, 0, 255);
+  rightSpeed = constrain(rightSpeed, 0, 255);
+  
+  analogWrite(MOTOR_LEFT_FWD, leftSpeed);
+  analogWrite(MOTOR_RIGHT_FWD, rightSpeed);
+  analogWrite(MOTOR_LEFT_BWD, 0);
+  analogWrite(MOTOR_RIGHT_BWD, 0);
+}
+
+// 벽면에서 회전
+void turnAtWall(int wallID) {
+  // 벽면 ID에 따라 회전 방향 결정 (예시)
+  if (wallID >= 100 && wallID < 125) {
+    turnLeft(500);  // 왼쪽 회전 500ms
+  } else {
+    turnRight(500); // 오른쪽 회전 500ms
+  }
+}
+
+// 주차 정렬
+void alignToParking(int errorX, int errorY) {
+  // 위치 오차가 작으면 정지
+  if (abs(errorX) < 20 && abs(errorY) < 20) {
+    stopMotors();
+    Serial.println("Parking aligned!");
+    return;
+  }
+  
+  // X축 정렬
+  if (errorX > 20) {
+    turnRight(100);
+  } else if (errorX < -20) {
+    turnLeft(100);
+  }
+  
+  // Y축 정렬 (전/후진)
+  if (errorY > 20) {
+    moveBackward(100);
+  } else if (errorY < -20) {
+    moveForward(100);
+  }
+}
+
+// 기본 모터 제어 함수들
+void moveForward(int duration) {
+  analogWrite(MOTOR_LEFT_FWD, 150);
+  analogWrite(MOTOR_RIGHT_FWD, 150);
+  analogWrite(MOTOR_LEFT_BWD, 0);
+  analogWrite(MOTOR_RIGHT_BWD, 0);
+  delay(duration);
+}
+
+void moveBackward(int duration) {
+  analogWrite(MOTOR_LEFT_FWD, 0);
+  analogWrite(MOTOR_RIGHT_FWD, 0);
+  analogWrite(MOTOR_LEFT_BWD, 150);
+  analogWrite(MOTOR_RIGHT_BWD, 150);
+  delay(duration);
+}
+
+void turnLeft(int duration) {
+  analogWrite(MOTOR_LEFT_FWD, 0);
+  analogWrite(MOTOR_RIGHT_FWD, 150);
+  analogWrite(MOTOR_LEFT_BWD, 150);
+  analogWrite(MOTOR_RIGHT_BWD, 0);
+  delay(duration);
+  stopMotors();
+}
+
+void turnRight(int duration) {
+  analogWrite(MOTOR_LEFT_FWD, 150);
+  analogWrite(MOTOR_RIGHT_FWD, 0);
+  analogWrite(MOTOR_LEFT_BWD, 0);
+  analogWrite(MOTOR_RIGHT_BWD, 150);
+  delay(duration);
+  stopMotors();
+}
+
+void stopMotors() {
+  analogWrite(MOTOR_LEFT_FWD, 0);
+  analogWrite(MOTOR_RIGHT_FWD, 0);
+  analogWrite(MOTOR_LEFT_BWD, 0);
+  analogWrite(MOTOR_RIGHT_BWD, 0);
+}
